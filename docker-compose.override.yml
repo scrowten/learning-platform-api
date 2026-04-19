@@ -1,0 +1,7 @@
+# Active override: no reverse proxy yet (IP:port access).
+# Remove this file once you add Caddy/Nginx and create the external proxy network:
+#   docker network create proxy
+services:
+  api:
+    networks:
+      - platform

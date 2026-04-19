@@ -1,0 +1,47 @@
+services:
+  api:
+    build: .
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://platform:platform@db:5432/platform
+      - PORT=${PORT:-8080}
+    volumes:
+      - ${CONTENT_REPO_PATH:-../learning-platform}:/content-repo:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - platform
+      - proxy  # future: join Caddy/Nginx proxy network when domain arrives
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: platform
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: platform
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"  # localhost only — not exposed externally
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - platform
+
+volumes:
+  db_data:
+
+networks:
+  platform:
+    driver: bridge
+  proxy:
+    external: true
+    name: proxy
