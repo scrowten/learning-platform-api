@@ -1,12 +1,30 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import get_db
 from app.models import Domain, Module, ModulePrerequisite
 
 router = APIRouter(tags=["content"])
+
+_ALLOWED_CONTENT_FILES = {"readme", "concepts", "cheatsheet", "sota"}
+
+
+def _repo_path() -> Path:
+    return Path(settings.content_repo_path)
+
+
+def _category_from_git_path(git_path: str | None) -> str | None:
+    if not git_path:
+        return None
+    parts = Path(git_path).parts
+    # git_path shape: domains/<domain>/<category>/<module>
+    return parts[2] if len(parts) >= 4 else None
 
 
 def _ok(data, meta=None):
@@ -22,6 +40,7 @@ def _module_to_dict(module: Module, include_prereqs: bool = False) -> dict:
         "tags": module.tags or [],
         "estimated_hours": module.estimated_hours,
         "git_path": module.git_path,
+        "category": _category_from_git_path(module.git_path),
         "last_reviewed": module.last_reviewed.isoformat() if module.last_reviewed else None,
         "sota_topics": module.sota_topics or [],
     }
@@ -132,3 +151,48 @@ async def search(
         [_module_to_dict(m) for m in modules],
         meta={"total": total, "page": page, "limit": limit},
     )
+
+
+@router.get("/modules/{module_id}/content", response_class=PlainTextResponse)
+async def get_module_content(
+    module_id: str,
+    file: str = Query(default="readme"),
+    db: AsyncSession = Depends(get_db),
+):
+    if file not in _ALLOWED_CONTENT_FILES:
+        raise HTTPException(status_code=400, detail=f"file must be one of: {', '.join(sorted(_ALLOWED_CONTENT_FILES))}")
+
+    module = await db.get(Module, module_id)
+    if not module or not module.git_path:
+        raise HTTPException(status_code=404, detail="Module not found")
+
+    base = _repo_path() / module.git_path
+    repo_resolved = _repo_path().resolve()
+    resolved = None
+    for name in (f"{file}.md", f"{file.upper()}.md", f"{file.capitalize()}.md"):
+        candidate = (base / name).resolve()
+        if str(candidate).startswith(str(repo_resolved)) and candidate.exists():
+            resolved = candidate
+            break
+
+    if resolved is None:
+        raise HTTPException(status_code=404, detail=f"{file}.md not found for this module")
+
+    return resolved.read_text(encoding="utf-8")
+
+
+@router.get("/modules/{module_id}/notebooks")
+async def list_module_notebooks(module_id: str, db: AsyncSession = Depends(get_db)):
+    module = await db.get(Module, module_id)
+    if not module or not module.git_path:
+        raise HTTPException(status_code=404, detail="Module not found")
+
+    notebooks_dir = _repo_path() / module.git_path / "notebooks"
+    if not notebooks_dir.exists():
+        return _ok([])
+
+    notebooks = [
+        {"name": f.stem, "filename": f.name, "git_path": f"{module.git_path}/notebooks/{f.name}"}
+        for f in sorted(notebooks_dir.glob("*.ipynb"))
+    ]
+    return _ok(notebooks)
