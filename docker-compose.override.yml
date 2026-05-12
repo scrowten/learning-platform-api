@@ -5,3 +5,7 @@ services:
   api:
     networks:
       - platform
+
+networks:
+  proxy:
+    external: false

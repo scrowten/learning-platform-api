@@ -7,6 +7,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://platform:platform@db:5432/platform
       - PORT=${PORT:-8080}
+      - CONTENT_REPO_PATH=/content-repo
     volumes:
       - ${CONTENT_REPO_PATH:-../learning-platform}:/content-repo:ro
     depends_on:

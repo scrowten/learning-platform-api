@@ -11,6 +11,7 @@ Usage:
 import asyncio
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -60,8 +61,10 @@ def _load_modules(repo_path: Path, valid_domain_ids: set[str]) -> tuple[list[dic
 
         git_path = str(readme.parent.relative_to(repo_path))
         last_reviewed = fm.get("last_reviewed")
-        if hasattr(last_reviewed, "isoformat"):
-            last_reviewed = last_reviewed.isoformat()
+        if isinstance(last_reviewed, str):
+            last_reviewed = date.fromisoformat(last_reviewed)
+        elif not isinstance(last_reviewed, date):
+            last_reviewed = None
 
         modules.append({
             "id": fm["id"],
