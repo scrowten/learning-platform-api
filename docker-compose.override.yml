@@ -5,6 +5,9 @@ services:
   api:
     networks:
       - platform
+  ui:
+    networks:
+      - platform
 
 networks:
   proxy:

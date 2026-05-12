@@ -18,6 +18,25 @@ services:
       - platform
       - proxy  # future: join Caddy/Nginx proxy network when domain arrives
 
+  ui:
+    build:
+      context: ../learning-platform-ui
+      target: ${UI_TARGET:-development}
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+      - API_URL_INTERNAL=http://api:8080
+    volumes:
+      - ../learning-platform-ui:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - platform
+
   db:
     image: pgvector/pgvector:pg16
     environment:
